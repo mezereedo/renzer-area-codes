@@ -67,6 +67,7 @@ const CITIES=[
 ];
 const S={
   wallet:5.00, joint:0.5, weed:false, foodEaten:0, billsDodged:0, condoms:false, nofarDone:false,
+  momDone:false, driveCount:0, bonDone:false,
   atCity:0, // index of current city on map
   t:0,
 };
@@ -413,11 +414,12 @@ const prologueScene={
   init(){
     this.px=W/2;this.py=560;this.blocks=0;this.steals=0;
     this.girl={x:W/2,y:790,speed:95,target:null,cool:0};
-    this.msg='';this.msgT=0;this.over=0;this.flash=0;
+    this.msg='';this.msgT=0;this.over=0;this.flash=0;this.rMsg='';this.rMsgT=0;
     this.targets=[{x:80,y:170,icon:'🧊',label:'המקרר'},{x:W/2,y:130,icon:'🫙',label:'הצנצנת'},{x:W-80,y:170,icon:'💧',label:'המים'}];
   },
-  pick(){ this.girl.target=this.targets[Math.floor(Math.random()*3)]; },
-  win(){ CITIES[0].done=true; music.sfx('win'); setScene(makeWinScene(CITIES[0],'שירה ויתרה והלכה להביא לך פיתות. מלך.','04 — נאסף!')); },
+  pick(){ this.girl.target=this.targets[Math.floor(Math.random()*3)];
+    if(this.girl.target.icon==='🫙'){ this.rMsg='"אל תיגעי בוויד!! זה של איציק סאסא!!"'; this.rMsgT=2.2; } },
+  win(){ CITIES[0].done=true; music.sfx('win'); setScene(makeWinScene(CITIES[0],'שירה ויתרה והלכה להביא לך פיתות. מלך.','04 — נאסף!',momScene)); },
   update(dt){
     if(this.over){ if(tapped)this.init(); return; }
     const sp=250;
@@ -442,6 +444,7 @@ const prologueScene={
       }
     }
     if(this.msgT>0)this.msgT-=dt;
+    if(this.rMsgT>0)this.rMsgT-=dt;
     if(this.flash>0)this.flash-=dt;
   },
   draw(){
@@ -466,6 +469,7 @@ const prologueScene={
     drawGirl(g.x,g.y,22,{hair:'#7a4a2a',acc:'🍴'});
     drawRenzer(this.px,this.py,24);
     if(this.msgT>0) bubble(g.x,g.y-40,220,this.msg);
+    if(this.rMsgT>0) bubble(this.px,this.py-44,280,this.rMsg);
     // score
     ctx.direction='rtl';
     txt('חסימות: '+this.blocks+' / 6',110,750,15,C.gold,'center',700);
@@ -557,7 +561,13 @@ function makeDriveScene(city,startDist){
     music.mode='drive';
     this.x=W/2; this.y=H-170; this.dist=startDist||0; this.speed=1; this.cars=[]; this.spawn=0;
     this.crash=0; this.t=0; this.dur=20+Math.random()*4; this.crashLine='';
-    this.shopAt=S.condoms?99:0.45+Math.random()*0.15; this.stopping=false; this.stopT=0;
+    // side events: at most ONE per drive, spread out — pharmacy on drive 1, mom's call on drive 3
+    if(!startDist) S.driveCount++;
+    this.sideEvent=startDist?null:
+      (!S.condoms&&S.driveCount>=1)?'pharm':
+      (!S.bonDone&&CITIES[2].done)?'bon':null;
+    this.eventAt=0.42+Math.random()*0.18;
+    this.stopping=false; this.stopT=0;
   },
   update(dt){
     this.t+=dt;
@@ -586,8 +596,11 @@ function makeDriveScene(city,startDist){
     }
     this.cars.forEach(c=>{ c.y+=(c.v*this.speed+120)*dt; if(c.type==='camel')c.x+=30*dt; });
     this.cars=this.cars.filter(c=>c.y<H+100);
-    // mandatory pharmacy stop, once per game
-    if(!S.condoms && this.dist>this.shopAt){ this.stopping=true; music.sfx('blip'); }
+    // side event trigger
+    if(this.sideEvent && this.dist>this.eventAt){
+      if(this.sideEvent==='pharm'){ this.sideEvent=null; this.stopping=true; music.sfx('blip'); }
+      else { this.sideEvent=null; S.bonDone=true; music.sfx('blip'); setScene(bonScene(city,this.dist)); return; }
+    }
     // collision
     if(this.crash<=0) this.cars.forEach(c=>{
       const w=c.type==='truck'?34:26, h=c.type==='truck'?60:42;
@@ -701,12 +714,113 @@ function pharmScene(city,resumeDist){
   }
  };
 }
+/* ---------- SLEEPOVER AT BON'S (side event, once, after Tel Aviv) ---------- */
+function bonScene(city,resumeDist){
+ const lines=[
+  ['עצירה ללילה אצל בון 🏠','(אין כסף למלון. ברור.)'],
+  ['בון:','"אחי. הכנתי קציצות טונה."'],
+  ['רנצר:','"בון. אתה מלאך עלי אדמות."'],
+  ['שעתיים של קציצות ופלייסטיישן.','איימי קיבלה שתיים מתחת לשולחן. 🐟'],
+  ['בבוקר, בדלת:','רנצר: "תודה על קציצות הטונה, מלך." 🫡'],
+  ['בון:','"סגור את הדלת. אני ישן."'],
+ ];
+ return {
+  i:0,t:0,
+  init(){this.i=0;this.t=0;},
+  update(dt){this.t+=dt;
+    if(tapped&&this.t>0.3){
+      this.i++; this.t=0;
+      if(this.i>=lines.length){ music.sfx('good'); setScene(makeDriveScene(city,Math.min(0.92,resumeDist))); }
+      else music.sfx('blip');
+    }},
+  draw(){
+    // Bon's living room at night
+    ctx.fillStyle='#191426';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#100c1c';ctx.fillRect(0,0,W,120);
+    txt('🌙',60,66,26);
+    ctx.direction='rtl';txt('הדירה של בון · אמצע הלילה',W/2,90,14,C.cyan,'center',700);ctx.direction='ltr';
+    // couch + tv + table
+    ctx.fillStyle='#3a2f5a';rr(70,330,200,90,16);ctx.fill();
+    ctx.fillStyle='#4a3f70';rr(70,315,200,26,12);ctx.fill();
+    ctx.fillStyle='#0d0a18';rr(330,240,130,86,8);ctx.fill();
+    ctx.strokeStyle='#4a3f80';ctx.strokeRect(330,240,130,86);
+    txt('🎮',395,283,26);
+    ctx.fillStyle='#4a3626';rr(180,480,170,60,10);ctx.fill();
+    ctx.fillStyle='#e8e0cc';ctx.beginPath();ctx.ellipse(265,480,58,14,0,0,7);ctx.fill();
+    txt('🐟',238,476,20);txt('🍽️',290,476,20);
+    ctx.direction='rtl';txt('קציצות טונה של בון',265,520,11,C.gold);ctx.direction='ltr';
+    // Bon (short hair guy)
+    ctx.save();ctx.translate(370,420);
+    ctx.beginPath();ctx.arc(0,0,30,0,7);ctx.fillStyle='#e0b184';ctx.fill();
+    ctx.beginPath();ctx.arc(0,-6,30,Math.PI*0.98,Math.PI*2.02);ctx.fillStyle='#241b16';ctx.fill();
+    ctx.fillStyle='#241b16';
+    ctx.beginPath();ctx.arc(-10,2,3,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(10,2,3,0,7);ctx.fill();
+    ctx.strokeStyle='#8a5d3d';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(0,12,10,0.1*Math.PI,0.9*Math.PI);ctx.stroke();
+    ctx.restore();
+    ctx.direction='rtl';txt('בון',370,466,12,C.dim);ctx.direction='ltr';
+    drawRenzer(140,420,34);
+    drawDog(230,560,15);
+    const L=lines[Math.min(this.i,lines.length-1)];
+    rr(55,660,W-110,110,14);ctx.fillStyle='#fdf8ec';ctx.fill();ctx.strokeStyle='#c9b98f';ctx.stroke();
+    ctx.direction='rtl';
+    txt(L[0],W/2,695,14,'#8a6a3a','center',800);
+    txt(L[1],W/2,730,15,'#2c2438','center',600);
+    ctx.direction='ltr';
+    pressStart(805,'SPACE / טאץ׳ — להמשיך');
+    hud();
+  }
+ };
+}
+/* ---------- MOM AT THE DOOR (Sdot Yam, right before the road trip) ---------- */
+const momScene={
+ i:0,t:0,
+ lines:[
+  ['רנצר אורז: 5 דולר, חצי ג׳וינט, איימי.','ואז... אמא (יצפן) מופיעה בדלת. 😨'],
+  ['אמא:','"רנצר׳ה! לאן אתה נוסע?!"'],
+  ['רנצר:','"יש לי סידורים, אמא."'],
+  ['אמא:','"תעבור בטלסו! שמעתי שיש מבצע!"'],
+  ['רנצר:','"אמא. אני. עסוק."'],
+  ['אמא:','"קח לפחות מעיל! רנצר! רנצר!!"'],
+  ['רנצר כבר באוטו. 😌','איימי מנפנפת בזנב לשלום.'],
+ ],
+ init(){this.i=0;this.t=0;S.momDone=true;},
+ update(dt){this.t+=dt;
+   if(tapped&&this.t>0.3){
+     this.i++; this.t=0;
+     if(this.i>=this.lines.length){ music.sfx('good'); setScene(mapScene); }
+     else music.sfx('blip');
+   }},
+ draw(){
+   ctx.fillStyle='#26203c';ctx.fillRect(0,0,W,H);
+   for(let y=100;y<H;y+=60)for(let x=0;x<W;x+=60){
+     ctx.fillStyle=(x/60+y/60)%2?'#2a2444':'#262040';ctx.fillRect(x,y,60,60);}
+   ctx.fillStyle='#1a1530';ctx.fillRect(0,64,W,50);
+   ctx.direction='rtl';txt('שדות ים · רגע לפני היציאה לדרך',W/2,89,15,C.cyan,'center',700);ctx.direction='ltr';
+   rr(W/2-55,150,110,210,10);ctx.fillStyle='#5a4030';ctx.fill();ctx.strokeStyle='#3a2a1c';ctx.stroke();
+   drawGirl(W/2,300,40,{hair:'#b8b8c0',acc:'👜'});
+   ctx.direction='rtl';txt('אמא (יצפן)',W/2,364,12,C.dim);ctx.direction='ltr';
+   drawRenzer(130,470,36);
+   txt('🎒',182,500,22);
+   drawDog(222,545,14);
+   drawAlfa(400,505,0.9,0.3);
+   const L=this.lines[Math.min(this.i,this.lines.length-1)];
+   rr(55,660,W-110,110,14);ctx.fillStyle='#fdf8ec';ctx.fill();ctx.strokeStyle='#c9b98f';ctx.stroke();
+   ctx.direction='rtl';
+   txt(L[0],W/2,695,14,'#8a6a3a','center',800);
+   txt(L[1],W/2,730,15,'#2c2438','center',600);
+   ctx.direction='ltr';
+   pressStart(805,'SPACE / טאץ׳ — להמשיך');
+   hud();
+ }
+};
 /* ---------- WIN SCENE ---------- */
-function makeWinScene(city,line,badgeLine){
+function makeWinScene(city,line,badgeLine,next){
  return {
   t:0,
   init(){this.t=0; music.mode='menu';},
-  update(dt){this.t+=dt; if(tapped&&this.t>0.8) setScene(mapScene);},
+  update(dt){this.t+=dt; if(tapped&&this.t>0.8) setScene(next||mapScene);},
   draw(){
     ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
     for(let i=0;i<26;i++){
@@ -1164,7 +1278,7 @@ const endingScene={
   t:0,
   init(){this.t=0; music.mode='drive'; music.sfx('win');},
   update(dt){this.t+=dt;
-    if(tapped&&this.t>2){ CITIES.forEach(c=>c.done=false); S.weed=false; S.foodEaten=0; S.condoms=false; S.nofarDone=false; setScene(titleScene); }
+    if(tapped&&this.t>2){ CITIES.forEach(c=>c.done=false); S.weed=false; S.foodEaten=0; S.condoms=false; S.nofarDone=false; S.momDone=false; S.bonDone=false; S.driveCount=0; setScene(titleScene); }
   },
   draw(){
     const g=ctx.createLinearGradient(0,0,0,H);
@@ -1201,12 +1315,14 @@ const endingScene={
       'הארנק: עדיין $5.00. לא נגע. אגדה.',
     ];
     if(S.condoms) stats.splice(4,0,'קונדומים מהסופר-פארם: נקנו. מי שילמה? היא. 🎈');
+    if(S.bonDone) stats.splice(2,0,'לינה אצל בון: קציצות טונה. עלות: 0 ₪. 🐟');
+    if(S.momDone) stats.splice(2,0,'טלסו: לא עברנו. אמא (יצפן): עדיין מחכה. 📞');
     if(S.nofarDone) stats.splice(1,0,'בונוס אילת: דואט מול הגרון של נופר. שרד. 🎤');
     const li=stats.length-1;
-    stats.forEach((s,i)=>txt(s,W/2,565+i*32,15,i===li?C.gold:C.cream,'center',i===li?800:400));
-    txt('רנצר — האיש שהמפה של ישראל מחייכת אליו.',W/2,745,14,C.mag,'center',700);
+    stats.forEach((s,i)=>txt(s,W/2,548+i*26,13.5,i===li?C.gold:C.cream,'center',i===li?800:400));
+    txt('רנצר — האיש שהמפה של ישראל מחייכת אליו.',W/2,778,14,C.mag,'center',700);
     ctx.direction='ltr';
-    pressStart(790,'SPACE / TAP — PLAY AGAIN');
+    pressStart(808,'SPACE / TAP — PLAY AGAIN');
     hud();
   }
 };
