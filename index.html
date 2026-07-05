@@ -14,12 +14,18 @@
     border:1px solid #3a2f66;border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;
     cursor:pointer;letter-spacing:.5px;}
   #songBtn{right:auto;left:10px;color:var(--cyan);}
-  #musicBtn:active,#songBtn:active{transform:scale(.96)}
+  #ytBtn{position:fixed;top:56px;left:10px;z-index:5;background:#241b3f;color:#ff5b5b;
+    border:1px solid #3a2f66;border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
+  #ytBox{position:fixed;bottom:12px;left:12px;z-index:6;display:none;border:2px solid var(--gold);
+    border-radius:10px;overflow:hidden;box-shadow:0 10px 30px #000a;line-height:0;}
+  #musicBtn:active,#songBtn:active,#ytBtn:active{transform:scale(.96)}
   @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
 </style>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <button id="musicBtn">🎵 MUSIC: ON</button>
 <button id="songBtn">🎧 שים את Area Codes (MP3)</button>
+<button id="ytBtn">▶️ Area Codes ביוטיוב</button>
+<div id="ytBox"></div>
 <input type="file" id="songFile" accept="audio/*" style="display:none">
 <script>
 'use strict';
@@ -161,7 +167,7 @@ const music={
     s.start(); this.customSrc=s; },
   stopCustom(){ if(this.customSrc){ try{this.customSrc.stop();}catch(e){} this.customSrc=null; } },
   update(){ if(!this.ac||!this.on)return;
-    if(this.customBuf){ this.next=this.ac.currentTime+0.1; return; } // user's own song replaces the beat
+    if(this.customBuf||this.ytOn){ this.next=this.ac.currentTime+0.1; return; } // user's song / YouTube replaces the beat
     while(this.next<this.ac.currentTime+0.35){
       this.next+=this.scheduleBar(this.next,this.mode==='drive'); this.bar++;
     } },
@@ -194,6 +200,22 @@ songFile.onchange=async()=>{
            songBtn.textContent='🎧 מנגן: '+(f.name.length>18?f.name.slice(0,17)+'…':f.name); },
       ()=>{ songBtn.textContent='🎧 קובץ לא נתמך, נסה MP3'; });
   }catch(e){ songBtn.textContent='🎧 שגיאה, נסה שוב'; }
+};
+/* YouTube corner player — official embed, works on the public (GitHub Pages) site;
+   hidden on the claude.ai artifact where external frames are blocked by CSP */
+const ytBtn=document.getElementById('ytBtn'), ytBox=document.getElementById('ytBox');
+if(!(/github\.io$/.test(location.hostname)||location.protocol==='file:')) ytBtn.style.display='none';
+ytBtn.onclick=()=>{
+  music.ytOn=!music.ytOn;
+  if(music.ytOn){
+    ytBox.style.display='block';
+    ytBox.innerHTML='<iframe width="250" height="141" src="https://www.youtube.com/embed?listType=search&list=Ludacris%20Area%20Codes%20Nate%20Dogg&autoplay=1" allow="autoplay; encrypted-media" allowfullscreen style="border:0"></iframe>';
+    ytBtn.textContent='⏹ סגור יוטיוב';
+  } else {
+    ytBox.style.display='none'; ytBox.innerHTML='';
+    ytBtn.textContent='▶️ Area Codes ביוטיוב';
+    if(music.ac) music.next=Math.max(music.next,music.ac.currentTime+0.05);
+  }
 };
 
 /* ---------- drawing helpers ---------- */
@@ -375,8 +397,8 @@ const titleScene={
     display('AREA CODES',W/2,218,26,C.mag);
     ctx.direction='rtl';
     txt('בחורות בכל המיקודים',W/2,268,19,C.cream,'center',700);
-    txt('🎧 יש לך את Area Codes? כפתור למעלה משמאל — והשיר בלופ',W/2,310,13,C.dim);
-    txt('(אין קובץ? יש ביט מקורי במשחק, בקטע חוקי)',W/2,332,11,'#6a5f8a');
+    txt('🎵 השיר האמיתי: ▶️ יוטיוב או 🎧 קובץ MP3 — למעלה משמאל',W/2,310,13,C.dim);
+    txt('(או פשוט הביט המקורי של המשחק, בקטע חוקי)',W/2,332,11,'#6a5f8a');
     ctx.direction='ltr';
     // wallet gag
     rr(W/2-150,375,300,74,12);ctx.fillStyle='#241b3f';ctx.fill();ctx.strokeStyle=C.line;ctx.stroke();
