@@ -377,6 +377,7 @@ const titleScene={
     ctx.direction='rtl';
     txt('ציוד למסע: 💵 בדיוק 5 דולר · 🚬 חצי ג׳וינט',W/2,400,14,C.gold);
     txt('חוק הברזל: רנצר לא מוציא שקל.',W/2,428,13,C.dim);
+    txt('מבוסס על סיפור אמיתי. לצערנו.',W/2,468,12,'#6a5f8a');
     ctx.direction='ltr';
     txt('ARROWS / WASD · SPACE · או אצבע',W/2,505,13,C.dim);
     pressStart(535,'SPACE / TAP TO START');
@@ -546,22 +547,29 @@ const mapScene={
   }
 };
 /* ---------- DRIVE ---------- */
-function makeDriveScene(city){
+function makeDriveScene(city,startDist){
  return {
   cheat(){ this.dist=1; },
   init(){
     music.mode='drive';
-    this.x=W/2; this.y=H-170; this.dist=0; this.speed=1; this.cars=[]; this.spawn=0;
-    this.crash=0; this.t=0; this.dur=20+Math.random()*4;
-    this.shopAt=S.condoms?2:0.3+Math.random()*0.35; this.shopObj=null; this.shopMsg=0; this.pauseT=0;
+    this.x=W/2; this.y=H-170; this.dist=startDist||0; this.speed=1; this.cars=[]; this.spawn=0;
+    this.crash=0; this.t=0; this.dur=20+Math.random()*4; this.crashLine='';
+    this.shopAt=S.condoms?99:0.45+Math.random()*0.15; this.stopping=false; this.stopT=0;
   },
   update(dt){
     this.t+=dt;
+    if(this.stopping){ // mandatory pharmacy pull-over: controls off, car slides to the shoulder
+      this.speed=Math.max(0.1,this.speed-dt*1.1);
+      this.x+=((W-125)-this.x)*Math.min(1,dt*2.5);
+      this.cars.forEach(c=>{c.y+=(c.v*this.speed+120)*dt;});
+      this.stopT+=dt;
+      if(this.stopT>1.5) setScene(pharmScene(city,this.dist));
+      return;
+    }
     const sp=300*this.speed;
     this.x=Math.max(95,Math.min(W-95,this.x+clampAx(axisX())*sp*dt));
     this.y=Math.max(430,Math.min(H-100,this.y+clampAx(axisY())*sp*dt*0.7));
     if(this.crash>0){this.crash-=dt; this.speed=0.45;}
-    else if(this.pauseT>0){this.pauseT-=dt; this.speed=0.35;}
     else this.speed=Math.min(1,this.speed+dt*0.8);
     this.dist+=dt/this.dur*this.speed;
     this.spawn-=dt;
@@ -575,21 +583,14 @@ function makeDriveScene(city){
     }
     this.cars.forEach(c=>{ c.y+=(c.v*this.speed+120)*dt; if(c.type==='camel')c.x+=30*dt; });
     this.cars=this.cars.filter(c=>c.y<H+100);
-    // pharmacy pit-stop (once per game): drive into it, she pays
-    if(!this.shopObj && !S.condoms && this.dist>this.shopAt)
-      this.shopObj={x:W-118,y:-120,got:false};
-    if(this.shopObj){
-      this.shopObj.y+=(300*this.speed+120)*dt;
-      if(!this.shopObj.got && Math.abs(this.shopObj.x-this.x)<58 && Math.abs(this.shopObj.y-this.y)<70){
-        this.shopObj.got=true; S.condoms=true; this.shopMsg=3.4; this.pauseT=1.1; music.sfx('cash');
-      }
-    }
-    if(this.shopMsg>0)this.shopMsg-=dt;
+    // mandatory pharmacy stop, once per game
+    if(!S.condoms && this.dist>this.shopAt){ this.stopping=true; music.sfx('blip'); }
     // collision
     if(this.crash<=0) this.cars.forEach(c=>{
       const w=c.type==='truck'?34:26, h=c.type==='truck'?60:42;
       if(Math.abs(c.x-this.x)<w&&Math.abs(c.y-this.y)<h+20){
         this.crash=1.2; music.sfx('crash');
+        this.crashLine=['נו באמת, האלפא!! 😫','יופי איטלקי, אמינות איטלקית 🇮🇹','האלפא עושה רעש מוזר. שוב.','זו לא מכה, זה קרקטר.'][Math.floor(Math.random()*4)];
       }
     });
     if(this.dist>=1){
@@ -620,14 +621,14 @@ function makeDriveScene(city){
       rr(-13,-12,26,26,6);ctx.fillStyle='#1c1826';ctx.fill();
       ctx.restore();
     });
-    // pharmacy
-    if(this.shopObj && !this.shopObj.got){
-      const s=this.shopObj;
-      rr(s.x-42,s.y-54,84,108,10);ctx.fillStyle='#e8f2ee';ctx.fill();
+    // pharmacy pull-over
+    if(this.stopping){
+      const sy=-140+this.stopT*430;
+      rr(W-165,sy-54,125,108,10);ctx.fillStyle='#e8f2ee';ctx.fill();
       ctx.strokeStyle='#2f7a5f';ctx.lineWidth=2;ctx.stroke();
-      txt('🏪',s.x,s.y-16,30);
-      ctx.fillStyle='#2f7a5f';rr(s.x-38,s.y+14,76,28,6);ctx.fill();
-      ctx.direction='rtl';txt('סופר-פארם',s.x,s.y+28,11,'#fff','center',800);ctx.direction='ltr';
+      txt('🏪',W-102,sy-16,30);
+      ctx.fillStyle='#2f7a5f';rr(W-157,sy+14,109,28,6);ctx.fill();
+      ctx.direction='rtl';txt('סופר-פארם',W-102,sy+28,12,'#fff','center',800);ctx.direction='ltr';
     }
     // player
     if(this.crash>0&&Math.floor(this.t*12)%2===0){} else {
@@ -635,14 +636,64 @@ function makeDriveScene(city){
       drawRenzer(this.x-1,this.y-10,9);
       drawDog(this.x+10,this.y+14,7);
     }
-    if(this.crash>0){ctx.direction='rtl';txt('נו באמת, האלפא!! 😫',this.x,this.y-70,15,C.mag,'center',700);ctx.direction='ltr';}
-    if(this.shopMsg>0) bubble(W/2,this.y-100,330,['עצירה טכנית: קונדומים 🎈 — ₪30.',city.girl+' שילמה בביט. כמובן.']);
+    if(this.crash>0){ctx.direction='rtl';txt(this.crashLine,this.x,this.y-70,15,C.mag,'center',700);ctx.direction='ltr';}
+    if(this.stopping){ctx.direction='rtl';txt('רגע רגע רגע... סופר-פארם!! 😳',W/2,360,20,C.gold,'center',800);ctx.direction='ltr';}
     // progress
     rr(85,H-46,W-170,16,8);ctx.fillStyle='#1a1430';ctx.fill();
     rr(85,H-46,(W-170)*Math.min(1,this.dist),16,8);ctx.fillStyle=C.cyan;ctx.fill();
     ctx.direction='rtl';
     txt('בדרך ל'+city.name+' ('+city.id+') 🚗💨',W/2,H-66,15,C.cream,'center',700);
     ctx.direction='ltr';
+    hud();
+  }
+ };
+}
+/* ---------- PHARMACY CHECKOUT (mandatory, once) ---------- */
+function pharmScene(city,resumeDist){
+ const lines=[
+  ['הקופאית:','"מצאתם הכל? מגניב הכובע של הבאגס באני."'],
+  ['הקופאית:','"מארז 🎈 משפחתי XL... ₪29.90. מזומן או אשראי?"'],
+  ['רנצר פותח את הארנק.','בפנים: 5 דולר. בדיוק. תמיד.'],
+  ['רנצר:','"שנייה, אני חייב לענות לשיחה."'],
+  ['רנצר (בטלפון):','"היי את... תעבירי לי בביט? זה בעצם בשבילך."'],
+  ['✅ התקבלו ₪29.90 מ'+city.girl+'.','הקופאית מוחאת כפיים. לאט. 👏'],
+ ];
+ return {
+  i:0,t:0,
+  init(){this.i=0;this.t=0;},
+  update(dt){this.t+=dt;
+    if(tapped&&this.t>0.35){
+      this.i++; this.t=0;
+      if(this.i>=lines.length){ S.condoms=true; music.sfx('cash'); setScene(makeDriveScene(city,Math.min(0.92,resumeDist))); }
+      else music.sfx('blip');
+    }},
+  draw(){
+    ctx.fillStyle='#232c3a';ctx.fillRect(0,0,W,H);
+    ctx.direction='rtl';txt('סופר-פארם · עצירת חובה 🎈',W/2,92,16,C.cyan,'center',700);ctx.direction='ltr';
+    // shelves
+    const prods=['🧴','🪥','💊','🧻','🧼','🩹','🧪','🍼','🌡️','☂️'];
+    for(let r=0;r<2;r++)for(let i=0;i<5;i++){
+      rr(45+i*88,130+r*115,72,88,8);ctx.fillStyle='#2c3850';ctx.fill();ctx.strokeStyle='#3c4a66';ctx.stroke();
+      txt(prods[r*5+i],81+i*88,174+r*115,28);
+    }
+    // counter + the box
+    ctx.fillStyle='#3a4560';rr(60,560,W-120,34,8);ctx.fill();
+    ctx.fillStyle='#2c3850';ctx.fillRect(70,594,W-140,80);
+    rr(W/2-30,516,60,40,6);ctx.fillStyle='#c9385f';ctx.fill();
+    txt('🎈',W/2,536,20);
+    ctx.direction='rtl';txt('מארז משפחתי XL',W/2,505,11,C.dim);ctx.direction='ltr';
+    // cashier + renzer on the phone
+    drawGirl(W-140,470,38,{hair:'#555a66',acc:'💳'});
+    drawRenzer(140,470,40);
+    if(this.i>=3) txt('📱',185,495,22);
+    // dialog card
+    const L=lines[Math.min(this.i,lines.length-1)];
+    rr(55,690,W-110,100,14);ctx.fillStyle='#fdf8ec';ctx.fill();ctx.strokeStyle='#c9b98f';ctx.stroke();
+    ctx.direction='rtl';
+    txt(L[0],W/2,722,14,'#8a6a3a','center',800);
+    txt(L[1],W/2,755,15,'#2c2438','center',600);
+    ctx.direction='ltr';
+    pressStart(818,'SPACE / טאץ׳ — להמשיך');
     hud();
   }
  };
